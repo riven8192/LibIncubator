@@ -1,4 +1,4 @@
-package tracks;
+package net.indiespot.tracks;
 
 import craterstudio.func.Callback;
 import craterstudio.math.Vec2;

@@ -1,4 +1,4 @@
-package tracks;
+package net.indiespot.tracks;
 
 import java.util.Set;
 

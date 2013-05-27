@@ -1,4 +1,4 @@
-package tracks;
+package net.indiespot.tracks;
 
 import craterstudio.math.Rotation;
 import craterstudio.math.Vec2;

@@ -1,4 +1,4 @@
-package tracks;
+package net.indiespot.tracks;
 
 public class ChainBuilder {
 	public static TrackUnitPair create(Track track, int... lengths) {
