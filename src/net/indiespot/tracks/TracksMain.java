@@ -15,6 +15,7 @@ import javax.swing.JPanel;
 import craterstudio.func.Callback;
 import craterstudio.func.Filter;
 import craterstudio.util.HighLevel;
+import craterstudio.math.EasyMath;
 import craterstudio.math.Rotation;
 import craterstudio.math.Vec2;
 
@@ -30,7 +31,7 @@ public class TracksMain {
 		builder.addCurve(128, -270.0f);
 		builder.addStraight(256);
 		builder.addCurve(48, +45.0f);
-		//SwitchTrack st = builder.addSwitch();
+		// SwitchTrack st = builder.addSwitch();
 		SwitchTrack switcher;
 		if (true) {
 			switcher = builder.addSwitch();
@@ -80,7 +81,7 @@ public class TracksMain {
 					@Override
 					public boolean accept(Track track) {
 						do {
-							//System.out.println(track);
+							// System.out.println(track);
 							if (!visited.add(track)) {
 								break;
 							}
@@ -96,21 +97,40 @@ public class TracksMain {
 					}
 				};
 
-				for (final Track track : new Track[] {track1, track2}) {
+				for (final Track track : new Track[] { track1, track2 }) {
 					drawTrack.accept(track);
 				}
 
 				Vec2 dst = new Vec2();
 
-				g.setColor(Color.BLACK);
+				g.setColor(Color.GRAY);
 				for (Track t : visited) {
 					for (int i = 0, len = (int) (t.length * 1.1f); i < len; i++) {
-						t.getPositionAtRatio((float) i / (len - 1), dst);
-						g.fillRect((int) dst.x, (int) dst.y, 1, 1);
+						float ratio = (float) i / (len - 1);
+						t.getPositionAtRatio(ratio, dst);
+						float angle = t.getAngleAtRatio(ratio);
+						Rotation rot = Rotation.fromDegrees(angle);
+
+						Vec2 p1 = rot.rotate(new Vec2(0, -6)).add(dst);
+						Vec2 p2 = rot.rotate(new Vec2(0, +6)).add(dst);
+
+						g.fillRect((int) p1.x, (int) p1.y, 1, 1);
+						g.fillRect((int) p2.x, (int) p2.y, 1, 1);
+
+						if (i % 7 == 0) {
+							p1 = rot.rotate(new Vec2(0, -8)).add(dst);
+							p2 = rot.rotate(new Vec2(0, +8)).add(dst);
+
+							for (int k = 0; k < 16; k++) {
+								float x = EasyMath.lerp( p1.x, p2.x, (float) k / 15);
+								float y = EasyMath.lerp( p1.y, p2.y, (float) k / 15);
+								g.fillRect((int) x, (int) y, 1, 1);
+							}
+						}
 					}
 				}
 
-				for (TrackUnitPair wagon : new TrackUnitPair[] {wagon1, wagon2}) {
+				for (TrackUnitPair wagon : new TrackUnitPair[] { wagon1, wagon2 }) {
 					g.setColor(Color.BLUE);
 					int dim = 16;
 					do {
@@ -121,7 +141,7 @@ public class TracksMain {
 					} while ((wagon = wagon.next) != null);
 				}
 
-				for (TrackUnitPair wagon : new TrackUnitPair[] {wagon1, wagon2}) {
+				for (TrackUnitPair wagon : new TrackUnitPair[] { wagon1, wagon2 }) {
 					g.setColor(Color.BLACK);
 					wagon.visitUnits(new Callback<TrackUnit>() {
 						@Override
@@ -129,14 +149,14 @@ public class TracksMain {
 							Vec2 rot = Rotation.fromDegrees(unit.angle).rotate(new Vec2(0, 16));
 
 							g.drawLine((int) (unit.pos.x + rot.x),//
-							        (int) (unit.pos.y + rot.y),//
-							        (int) (unit.pos.x - rot.x),//
-							        (int) (unit.pos.y - rot.y));
+							   (int) (unit.pos.y + rot.y),//
+							   (int) (unit.pos.x - rot.x),//
+							   (int) (unit.pos.y - rot.y));
 						}
 					});
 				}
 
-				for (TrackUnitPair wagon : new TrackUnitPair[] {wagon1, wagon2}) {
+				for (TrackUnitPair wagon : new TrackUnitPair[] { wagon1, wagon2 }) {
 					g.setColor(Color.RED);
 					do {
 						Rotation r = Rotation.fromVector(new Vec2(wagon.head.pos).sub(wagon.tail.pos));
