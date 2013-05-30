@@ -86,7 +86,11 @@ public class GcObject {
 		sb.append(clazz.name).append('#').append(pointer).append("[\r\n");
 		for (int i = 0; i < clazz.referenceFieldCount; i++) {
 			int ref = getFieldValue(memory, pointer, i);
-			sb.append("\t[").append(i).append(']').append('=').append(ref == 0 ? "NULL" : String.valueOf(ref)).append("\r\n");
+			sb.append("\tref[").append(i).append(']').append('=').append(ref == 0 ? "NULL" : String.valueOf(ref)).append("\r\n");
+		}
+		for (int i = clazz.referenceFieldCount; i < clazz.overallFieldCount; i++) {
+			int val = getFieldValue(memory, pointer, i);
+			sb.append("\tval[").append(i).append(']').append('=').append(val).append("\r\n");
 		}
 		return sb.append(']').toString();
 	}

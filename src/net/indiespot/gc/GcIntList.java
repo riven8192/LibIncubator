@@ -27,12 +27,12 @@ public class GcIntList {
 		this.size -= 1;
 		return value;
 	}
-	
-	public int removeLast(){
-		if(this.size==0){
+
+	public int removeLast() {
+		if (this.size == 0) {
 			throw new IndexOutOfBoundsException();
 		}
-		
+
 		return this.data[--this.size];
 	}
 
@@ -52,5 +52,9 @@ public class GcIntList {
 
 	public int size() {
 		return this.size;
+	}
+
+	public void clear() {
+		this.size = 0;
 	}
 }

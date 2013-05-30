@@ -27,7 +27,7 @@ public class GcHeap {
 	}
 
 	public int malloc(GcClass clazz) {
-		if (clazz.isArray) {
+		if (clazz.isArray()) {
 			throw new IllegalStateException();
 		}
 		int pointer = this.malloc(clazz.sizeof);
@@ -38,7 +38,7 @@ public class GcHeap {
 	}
 
 	public int malloc(GcClass clazz, int arrayLength) {
-		if (!clazz.isArray) {
+		if (!clazz.isArray()) {
 			throw new IllegalStateException();
 		}
 		int pointer = this.malloc(clazz.sizeof + arrayLength);

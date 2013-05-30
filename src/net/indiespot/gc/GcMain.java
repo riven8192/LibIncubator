@@ -45,7 +45,7 @@ public class GcMain {
 	}
 
 	public static void main(String[] args) {
-		if (true) {
+		if (!true) {
 			for (int i = 1; i <= 1025; i++) {
 				int pot = GcManagedMemory.roundUpToPowerOfTwo(i);
 				System.out.println(i + " -> " + pot + " -> " + GcManagedMemory.log2(pot));
@@ -73,17 +73,43 @@ public class GcMain {
 
 		GcMemory memory = new GcMemory(memorySize, heapSize);
 
+		if (!true) {
+			GcManagedMemory managed = new GcManagedMemory(memory, 1024, 32);
+			int pntr1 = managed.malloc(1);
+			int pntr2 = managed.malloc(1);
+			int pntr3 = managed.malloc(2);
+			int pntr4 = managed.malloc(2);
+			int pntr5 = managed.malloc(3);
+			int pntr6 = managed.malloc(3);
+			int pntr7 = managed.malloc(4);
+
+			managed.free(pntr1);
+			managed.free(pntr2);
+			// managed.free(pntr3);
+			// managed.free(pntr4);
+			managed.free(pntr5);
+			managed.free(pntr6);
+
+			managed.tidy();
+
+			managed.malloc(4);
+
+			return;
+		}
+
 		List<GcHeap> heaps = createHeaps(memory);
 		System.out.println("heaps: " + heaps.size());
 
-		GcClass clazz = new GcClass(13, "Obj", 3, 4, false);
-		GcClass arrayClazz = new GcClass(14, "Arr", 0, 0, true);
+		GcClass clazz = new GcClass(13, "Obj", 3, 4, GcClass.CLASS);
+		GcClass arrayClazz = new GcClass(14, "Arr", 0, 0, GcClass.REF_ARRAY);
 
 		GcIntList objs = new GcIntList();
 
 		System.out.println("creating objects...");
 		for (int i = 0; i < objectCount; i++) {
-			objs.add(newObject(heaps, clazz));
+			int obj = newObject(heaps, clazz);
+			GcObject.setFieldValue(memory, obj, 3, 13 + i);
+			objs.add(obj);
 		}
 
 		System.out.println("creating array...");
@@ -94,12 +120,16 @@ public class GcMain {
 		Random r = new Random(21345);
 
 		System.out.println("connecting objects...");
-		for (int i = 0; i < 2 * objectCount; i++) {
+		for (int i = 0; i < 16 * objectCount; i++) {
 			int obj1 = objs.get(r.nextInt(objs.size()));
 			int obj2 = objs.get(r.nextInt(objs.size()));
 
 			int fields = GcObject.getClass(memory, obj1).referenceFieldCount;
 			GcObject.setFieldValue(memory, obj1, r.nextInt(fields), obj2);
+		}
+
+		for (int i = 0; i < objectCount; i++) {
+			System.out.println(GcObject.toString(memory, objs.get(i)));
 		}
 
 		System.out.println("peeking at heaps...");
@@ -130,10 +160,11 @@ public class GcMain {
 
 			int trace1 = gc.trace(roots);
 			{
+				gc.logCopiedArrays = gc.logCopiedObjects = 0;
 				long t0 = System.nanoTime();
 				gc.copyCollect(roots, alive, empty);
 				long t1 = System.nanoTime();
-				System.out.println("gc took:      " + (t1 - t0) / 1000 + "us");
+				System.out.println("gc took:      " + (t1 - t0) / 1000 + "us (copies: " + gc.logCopiedObjects + " objects, " + gc.logCopiedArrays + " arrays)");
 			}
 			int trace2 = gc.trace(roots);
 
@@ -176,7 +207,7 @@ public class GcMain {
 		List<GcHeap> heaps = createHeaps(memory);
 		System.out.println("heaps: " + heaps.size());
 
-		GcClass clazz = new GcClass(13, "Obj", 3, 4, false);
+		GcClass clazz = new GcClass(13, "Obj", 3, 4, GcClass.CLASS);
 
 		System.out.println("creating objects...");
 

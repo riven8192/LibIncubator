@@ -29,7 +29,7 @@ public class Gc {
 		this.flag = flag_provider.incrementAndGet();
 
 		for (int i = 0; i < roots.size(); i++) {
-			int newRoot = this.mark(roots.get(i));
+			int newRoot = this.traceAndMarkAndRewritePointers(roots.get(i));
 			if (newRoot > 0) {
 				roots.set(i, newRoot);
 			}
@@ -77,18 +77,18 @@ public class Gc {
 
 		GcClass clazz = GcObject.getClass(memory, object);
 
-		if (clazz.isArray) {
-			int arrayLength = GcArray.getLength(memory, object);
-			for (int arrayIndex = 0; arrayIndex < arrayLength; arrayIndex++) {
-				int target = GcArray.getArrayElement(memory, object, arrayIndex);
+		if (clazz.arrayFlags == GcClass.CLASS) {
+			int fieldCount = clazz.referenceFieldCount;
+			for (int fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++) {
+				int target = GcObject.getFieldValue(memory, object, fieldIndex);
 				if (target != 0x00) {
 					sum += this.trace(target);
 				}
 			}
-		} else {
-			int fieldCount = clazz.referenceFieldCount;
-			for (int fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++) {
-				int target = GcObject.getFieldValue(memory, object, fieldIndex);
+		} else if (clazz.arrayFlags == GcClass.REF_ARRAY) {
+			int arrayLength = GcArray.getLength(memory, object);
+			for (int arrayIndex = 0; arrayIndex < arrayLength; arrayIndex++) {
+				int target = GcArray.getArrayElement(memory, object, arrayIndex);
 				if (target != 0x00) {
 					sum += this.trace(target);
 				}
@@ -102,7 +102,12 @@ public class Gc {
 		return object / memory.heapSize == sourceHeap.heapIndex;
 	}
 
-	private int mark(int object) {
+	public int logCopiedObjects, logCopiedArrays;
+
+	/**
+	 * Mark object and returns (new) pointer to this object
+	 */
+	private int traceAndMarkAndRewritePointers(int object) {
 		if (GcObject.getGcFlag(memory, object) == this.flag) {
 			// already processed this object
 			return GcObject.getForwardPointer(memory, object);
@@ -110,54 +115,33 @@ public class Gc {
 		GcObject.setGcFlag(memory, object, this.flag);
 
 		GcClass clazz = GcObject.getClass(memory, object);
-		String descr = clazz.isArray ? "array" : "object";
 
 		if (verbose) {
+			String descr = clazz.isArray() ? "array" : "object";
 			System.out.println("\t" + descr + " #" + object);
 		}
 
 		if (this.shouldMoveObject(object)) {
-
-			if (clazz.isArray) {
+			if (clazz.isArray()) {
+				logCopiedArrays++;
 				object = GcArray.copyTo(memory, object, targetHeap);
 			} else {
+				logCopiedObjects++;
 				object = GcObject.copyTo(memory, object, targetHeap);
 			}
 
 			if (verbose) {
+				String descr = clazz.isArray() ? "array" : "object";
 				System.out.println("\t" + descr + " #" + object + " (moved)");
 			}
 		} else {
 			if (verbose) {
+				String descr = clazz.isArray() ? "array" : "object";
 				System.out.println("\t" + descr + " #" + object + " (not in source heap)");
 			}
 		}
 
-		if (clazz.isArray) {
-			int arrayLength = GcArray.getLength(memory, object);
-			for (int arrayIndex = 0; arrayIndex < arrayLength; arrayIndex++) {
-				int target = GcArray.getArrayElement(memory, object, arrayIndex);
-				if (target == 0x00) {
-					continue;
-				}
-
-				if (verbose) {
-					System.out.println("\t\tARRAY reference #" + object + "[" + arrayIndex + "] = " + target);
-				}
-
-				int newTarget = this.mark(target);
-				System.out.println(target + " -> " + newTarget);
-				if (verbose) {
-					System.out.println("\tback at object #" + object);
-				}
-				if (newTarget > 0) {
-					if (verbose) {
-						System.out.println("\t\tARRAY reference #" + object + "[" + arrayIndex + "] = " + newTarget + " (rewritten)");
-					}
-					GcArray.setArrayElement(memory, object, arrayIndex, newTarget);
-				}
-			}
-		} else {
+		if (clazz.arrayFlags == GcClass.CLASS) {
 			int fieldCount = clazz.referenceFieldCount;
 			for (int fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++) {
 				int target = GcObject.getFieldValue(memory, object, fieldIndex);
@@ -169,16 +153,46 @@ public class Gc {
 					System.out.println("\t\treference #" + object + "[" + fieldIndex + "] = " + target);
 				}
 
-				int newTarget = this.mark(target);
+				int newTarget = this.traceAndMarkAndRewritePointers(target);
 				if (verbose) {
 					System.out.println("\tback at object #" + object);
 				}
-				if (newTarget > 0) {
-					if (verbose) {
-						System.out.println("\t\treference #" + object + "[" + fieldIndex + "] = " + newTarget + " (rewritten)");
-					}
-					GcObject.setFieldValue(memory, object, fieldIndex, newTarget);
+				if (newTarget <= 0) {
+					throw new IllegalStateException();
 				}
+				if (verbose) {
+					System.out.println("\t\treference #" + object + "[" + fieldIndex + "] = " + newTarget + " (rewritten)");
+				}
+
+				// rewrite pointer in field
+				GcObject.setFieldValue(memory, object, fieldIndex, newTarget);
+			}
+		} else if (clazz.arrayFlags == GcClass.REF_ARRAY) {
+			int arrayLength = GcArray.getLength(memory, object);
+			for (int arrayIndex = 0; arrayIndex < arrayLength; arrayIndex++) {
+				int target = GcArray.getArrayElement(memory, object, arrayIndex);
+				if (target == 0x00) {
+					continue;
+				}
+
+				if (verbose) {
+					System.out.println("\t\tARRAY reference #" + object + "[" + arrayIndex + "] = " + target);
+				}
+
+				int newTarget = this.traceAndMarkAndRewritePointers(target);
+				System.out.println(target + " -> " + newTarget);
+				if (verbose) {
+					System.out.println("\tback at object #" + object);
+				}
+				if (newTarget <= 0) {
+					throw new IllegalStateException();
+				}
+				if (verbose) {
+					System.out.println("\t\tARRAY reference #" + object + "[" + arrayIndex + "] = " + newTarget + " (rewritten)");
+				}
+
+				// rewrite pointer in array element
+				GcArray.setArrayElement(memory, object, arrayIndex, newTarget);
 			}
 		}
 
