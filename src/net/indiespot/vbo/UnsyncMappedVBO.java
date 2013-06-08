@@ -14,7 +14,7 @@ public class UnsyncMappedVBO implements VBO {
 	private static final int MAX_FRAMEBUFFER_COUNT = 2 * 3;
 
 	private final int glTarget, glUsage;
-	private final int[] bufferHandles;
+	private final int[] bufferHandles, bufferSizes;
 	private int requestedSize, allocatedSize;
 	private int currentBufferIndex;
 
@@ -22,6 +22,7 @@ public class UnsyncMappedVBO implements VBO {
 		this.glTarget = glTarget; // GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER
 		this.glUsage = glUsage; // GL_STATIC_DRAW, GL_STREAM_DRAW
 
+		bufferSizes = new int[MAX_FRAMEBUFFER_COUNT];
 		bufferHandles = new int[MAX_FRAMEBUFFER_COUNT];
 		for (int i = 0; i < this.bufferHandles.length; i++) {
 			bufferHandles[i] = glGenBuffers();
@@ -46,58 +47,34 @@ public class UnsyncMappedVBO implements VBO {
 	}
 
 	@Override
-	public int ensureSize(int size) {
-		assert size > 0;
-
-		requestedSize = size;
-
-		if (size > allocatedSize) {
-			allocatedSize = size;
-			for (int i = 0; i < bufferHandles.length; i++) {
-				glBindBuffer(glTarget, bufferHandles[i]);
-				glBufferData(glTarget, allocatedSize, glUsage);
-			}
-			this.bind();
+	public ByteBuffer map(int off, int len) {
+		if (off < 0 || len <= 0) {
+			throw new IllegalArgumentException();
 		}
 
-		return allocatedSize;
-	}
-
-	@Override
-	public int trimToSize() {
-		if (requestedSize != allocatedSize) {
-			allocatedSize = requestedSize;
-			for (int i = 0; i < bufferHandles.length; i++) {
-				glBindBuffer(glTarget, bufferHandles[i]);
-				glBufferData(glTarget, allocatedSize, glUsage);
-			}
-			this.bind();
+		final int end = off + len;
+		if (end > bufferSizes[currentBufferIndex]) {
+			bufferSizes[currentBufferIndex] = end;
+			glBufferData(glTarget, bufferSizes[currentBufferIndex], glUsage);
 		}
 
-		return allocatedSize;
-	}
-
-	@Override
-	public int size() {
-		return allocatedSize;
-	}
-
-	@Override
-	public ByteBuffer map() {
-		long offset = 0;
-		long length = requestedSize;
+		ByteBuffer mapped;
 
 		if (GLContext.getCapabilities().OpenGL30) {
-			int flags = GL30.GL_MAP_WRITE_BIT | GL30.GL_MAP_UNSYNCHRONIZED_BIT | GL30.GL_MAP_INVALIDATE_RANGE_BIT;
-			return GL30.glMapBufferRange(glTarget, offset, length, flags, null);
+			int flags = GL30.GL_MAP_WRITE_BIT | GL30.GL_MAP_UNSYNCHRONIZED_BIT;// | GL30.GL_MAP_INVALIDATE_RANGE_BIT;
+			mapped = GL30.glMapBufferRange(glTarget, off, len, flags, null);
+		} else if (GLContext.getCapabilities().GL_ARB_map_buffer_range) {
+			int flags = ARBMapBufferRange.GL_MAP_WRITE_BIT | ARBMapBufferRange.GL_MAP_UNSYNCHRONIZED_BIT;// | ARBMapBufferRange.GL_MAP_INVALIDATE_RANGE_BIT;
+			mapped = ARBMapBufferRange.glMapBufferRange(glTarget, off, len, flags, null);
+		} else {
+			mapped = GL15.glMapBuffer(glTarget, GL15.GL_WRITE_ONLY, null);
 		}
 
-		if (GLContext.getCapabilities().GL_ARB_map_buffer_range) {
-			int flags = ARBMapBufferRange.GL_MAP_WRITE_BIT | ARBMapBufferRange.GL_MAP_UNSYNCHRONIZED_BIT | ARBMapBufferRange.GL_MAP_INVALIDATE_RANGE_BIT;
-			return ARBMapBufferRange.glMapBufferRange(glTarget, offset, length, flags, null);
+		if (mapped == null) {
+			throw new IllegalStateException("mapped buffer is null: length=" + len + ", requestedSize=" + requestedSize + ", allocatedSize=" + allocatedSize);
 		}
 
-		return GL15.glMapBuffer(glTarget, GL15.GL_WRITE_ONLY, null);
+		return mapped;
 	}
 
 	@Override

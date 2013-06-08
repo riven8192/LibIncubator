@@ -1,6 +1,7 @@
 package net.indiespot.vbo;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 import org.lwjgl.BufferUtils;
 
@@ -9,18 +10,16 @@ import static org.lwjgl.opengl.GL15.*;
 public class DataBufferVBO implements VBO {
 	private final int glTarget, glUsage;
 	private final int bufferHandle;
-	private int requestedSize;
-	private int allocatedSize;
 	private ByteBuffer scratch;
 
 	public DataBufferVBO(int glTarget, int glUsage) {
 		this.glTarget = glTarget; // GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER
 		this.glUsage = glUsage; // GL_STATIC_DRAW, GL_STREAM_DRAW
 
-		requestedSize = 0;
-		allocatedSize = 0;
-
 		bufferHandle = glGenBuffers();
+
+		glBufferData(glTarget, 0, glUsage);
+		scratch = BufferUtils.createByteBuffer(0);
 	}
 
 	@Override
@@ -38,40 +37,19 @@ public class DataBufferVBO implements VBO {
 		return bufferHandle;
 	}
 
-	@Override
-	public int ensureSize(int size) {
-		assert size > 0;
+	private int maxEnd;
 
-		requestedSize = size;
-		if (size > allocatedSize) {
-			allocatedSize = size;
-			glBufferData(glTarget, allocatedSize, glUsage);
-			scratch = BufferUtils.createByteBuffer(allocatedSize);
+	@Override
+	public ByteBuffer map(int off, int len) {
+		maxEnd = Math.max(maxEnd, off + len);
+		if (maxEnd > scratch.capacity()) {
+			scratch = BufferUtils.createByteBuffer(maxEnd);
 		}
 
-		return allocatedSize;
-	}
-
-	@Override
-	public int trimToSize() {
-		if (requestedSize != allocatedSize) {
-			allocatedSize = requestedSize;
-			glBufferData(glTarget, allocatedSize, glUsage);
-			scratch = BufferUtils.createByteBuffer(allocatedSize);
-		}
-
-		return allocatedSize;
-	}
-
-	@Override
-	public int size() {
-		return allocatedSize;
-	}
-
-	@Override
-	public ByteBuffer map() {
 		scratch.clear();
-		return scratch;
+		scratch.position(off);
+		scratch.limit(off + len);
+		return scratch.slice().order(ByteOrder.nativeOrder());
 	}
 
 	@Override
@@ -80,7 +58,7 @@ public class DataBufferVBO implements VBO {
 
 		{
 			// orphan (roughly halves duration)
-			glBufferData(glTarget, allocatedSize, glUsage);
+			glBufferData(glTarget, maxEnd, glUsage);
 		}
 
 		glBufferData(glTarget, scratch, glUsage);

@@ -3,22 +3,21 @@ package net.indiespot.vbo;
 import java.nio.ByteBuffer;
 
 public class PickBestVBO implements VBO {
-
+	private final int glTarget, glUsage;
 	private VBO currentVBO, unsyncMappedVBO, dataBufferVBO;
 	private int frameCounter;
 
 	public PickBestVBO(int glTarget, int glUsage) {
-		dataBufferVBO = new DataBufferVBO(glTarget, glUsage);
-		unsyncMappedVBO = new UnsyncMappedVBO(glTarget, glUsage);
-		currentVBO = unsyncMappedVBO;
+		this.glTarget = glTarget;
+		this.glUsage = glUsage;
+		this.needsInit = true;
 	}
 
 	private static final int test_types = 2;
 	private static final int test_count = 3 * test_types;
 	private static final int test_size = 5;
 
-	private long[] dbTook = new long[test_size];
-	private long[] umTook = new long[test_size];
+	private long[] dbTook, umTook;
 	private int testIndex;
 	private static int vbo_gen;
 	private final int vboId = ++vbo_gen;
@@ -27,46 +26,73 @@ public class PickBestVBO implements VBO {
 		return String.valueOf(vboId);
 	}
 
+	private boolean needsInit;
+
+	private void init() {
+		if (dataBufferVBO != null) {
+			dataBufferVBO.delete();
+			dataBufferVBO = null;
+		}
+		if (unsyncMappedVBO != null) {
+			unsyncMappedVBO.delete();
+			unsyncMappedVBO = null;
+		}
+
+		dataBufferVBO = new DataBufferVBO(glTarget, glUsage);
+		unsyncMappedVBO = new UnsyncMappedVBO(glTarget, glUsage);
+		currentVBO = null;
+		frameCounter = 0;
+		dbTook = new long[test_size];
+		umTook = new long[test_size];
+
+		needsInit = false;
+	}
+
 	@Override
 	public void nextFrame() {
-		testIndex = frameCounter / test_size;
-		if (testIndex < test_count) {
-			if (testIndex % test_types == 0) {
-				currentVBO = dataBufferVBO;
-			} else {
-				currentVBO = unsyncMappedVBO;
-			}
-		} else if (frameCounter == test_count * test_size) {
-			long dataBufferTook = Long.MAX_VALUE;
-			long unsyncMappedTook = Long.MAX_VALUE;
-			for (int i = 0; i < test_size; i++) {
-				dataBufferTook = Math.min(dataBufferTook, dbTook[i]);
-				unsyncMappedTook = Math.min(unsyncMappedTook, umTook[i]);
-			}
+		if (needsInit) {
+			this.init();
+		}
 
-			if (dataBufferTook < unsyncMappedTook) {
-				currentVBO = dataBufferVBO;
-				unsyncMappedVBO.delete();
-				unsyncMappedVBO = null;
-			} else {
-				currentVBO = unsyncMappedVBO;
-				dataBufferVBO.delete();
-				dataBufferVBO = null;
+		if (true) {
+			currentVBO = unsyncMappedVBO;
+		} else {
+			testIndex = frameCounter / test_size;
+			if (testIndex < test_count) {
+				if (testIndex % test_types == 0) {
+					currentVBO = dataBufferVBO;
+				} else {
+					currentVBO = unsyncMappedVBO;
+				}
+			} else if (frameCounter == test_count * test_size) {
+				long dataBufferTook = Long.MAX_VALUE;
+				long unsyncMappedTook = Long.MAX_VALUE;
+				for (int i = 0; i < test_size; i++) {
+					dataBufferTook = Math.min(dataBufferTook, dbTook[i]);
+					unsyncMappedTook = Math.min(unsyncMappedTook, umTook[i]);
+				}
+				dbTook = null;
+				umTook = null;
+
+				if (dataBufferTook < unsyncMappedTook) {
+					currentVBO = dataBufferVBO;
+					unsyncMappedVBO.delete();
+					unsyncMappedVBO = null;
+				} else {
+					currentVBO = unsyncMappedVBO;
+					dataBufferVBO.delete();
+					dataBufferVBO = null;
+				}
+
+				System.out.println("VBO " + name() + " - picked: " + currentVBO.getClass().getSimpleName() + //
+				        " (buffer=" + (dataBufferTook / 1000 / test_size) + "us, unsync=" + (unsyncMappedTook / 1000 / test_size) + "us, factor: " + (double) dataBufferTook / unsyncMappedTook + ")");
 			}
-
-			dbTook = null;
-			umTook = null;
-
-			System.out.println("VBO " + name() + " - size:" + (currentVBO.size() / 1024) + "K"//
-			        + " - picked: " + currentVBO.getClass().getSimpleName() + //
-			        " (buffer=" + (dataBufferTook / 1000 / test_size) + "us, unsync=" + (unsyncMappedTook / 1000 / test_size) + "us, factor: " + (double) dataBufferTook / unsyncMappedTook + ")");
 		}
 
 		currentVBO.nextFrame();
 		VBO other = other();
 		if (other != null) {
-			other.nextFrame();
-			other.ensureSize(currentVBO.size());
+			//other.nextFrame();
 		}
 		frameCounter++;
 	}
@@ -91,29 +117,14 @@ public class PickBestVBO implements VBO {
 		return currentVBO.currentBufferHandle();
 	}
 
-	@Override
-	public int ensureSize(int size) {
-		return currentVBO.ensureSize(size);
-	}
-
-	@Override
-	public int trimToSize() {
-		return currentVBO.trimToSize();
-	}
-
-	@Override
-	public int size() {
-		return currentVBO.size();
-	}
-
 	private long mapTime;
 
 	@Override
-	public ByteBuffer map() {
+	public ByteBuffer map(int off, int len) {
 		if (testIndex < test_count) {
 			mapTime = System.nanoTime();
 		}
-		return currentVBO.map();
+		return currentVBO.map(off, len);
 	}
 
 	@Override

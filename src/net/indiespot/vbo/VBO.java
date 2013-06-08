@@ -10,13 +10,7 @@ public interface VBO {
 
 	public int currentBufferHandle();
 
-	public int ensureSize(int size);
-
-	public int trimToSize();
-
-	public int size();
-
-	public ByteBuffer map();
+	public ByteBuffer map(int off, int len);
 
 	public void unmap();
 
