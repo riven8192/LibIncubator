@@ -88,12 +88,12 @@ public class UnsyncMappedVBO implements VBO {
 		long length = requestedSize;
 
 		if (GLContext.getCapabilities().OpenGL30) {
-			int flags = GL30.GL_MAP_WRITE_BIT | GL30.GL_MAP_UNSYNCHRONIZED_BIT;
+			int flags = GL30.GL_MAP_WRITE_BIT | GL30.GL_MAP_UNSYNCHRONIZED_BIT | GL30.GL_MAP_INVALIDATE_RANGE_BIT;
 			return GL30.glMapBufferRange(glTarget, offset, length, flags, null);
 		}
 
 		if (GLContext.getCapabilities().GL_ARB_map_buffer_range) {
-			int flags = ARBMapBufferRange.GL_MAP_WRITE_BIT | ARBMapBufferRange.GL_MAP_UNSYNCHRONIZED_BIT;
+			int flags = ARBMapBufferRange.GL_MAP_WRITE_BIT | ARBMapBufferRange.GL_MAP_UNSYNCHRONIZED_BIT | ARBMapBufferRange.GL_MAP_INVALIDATE_RANGE_BIT;
 			return ARBMapBufferRange.glMapBufferRange(glTarget, offset, length, flags, null);
 		}
 
