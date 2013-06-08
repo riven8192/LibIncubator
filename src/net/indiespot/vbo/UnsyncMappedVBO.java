@@ -10,7 +10,7 @@ import org.lwjgl.opengl.GLContext;
 import static org.lwjgl.opengl.GL15.*;
 
 public class UnsyncMappedVBO implements VBO {
-	// triple buffering in stereo mode is rather rare through..
+	// triple buffering in stereo mode is rather rare though..
 	private static final int MAX_FRAMEBUFFER_COUNT = 2 * 3;
 
 	private final int glTarget, glUsage;

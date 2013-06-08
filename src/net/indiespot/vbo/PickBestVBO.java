@@ -57,7 +57,7 @@ public class PickBestVBO implements VBO {
 			dbTook = null;
 			umTook = null;
 
-			System.out.println("VBO " + name() + " - size:" + (currentVBO.ensureSize(1) / 1024) + "K"//
+			System.out.println("VBO " + name() + " - size:" + (currentVBO.size() / 1024) + "K"//
 			        + " - picked: " + currentVBO.getClass().getSimpleName() + //
 			        " (buffer=" + (dataBufferTook / 1000 / test_size) + "us, unsync=" + (unsyncMappedTook / 1000 / test_size) + "us, factor: " + (double) dataBufferTook / unsyncMappedTook + ")");
 		}
