@@ -28,7 +28,7 @@ public class Doppler {
 	private static void lowPassFilter(float[] src, float[] dst, int bits) {
 		float mul = 1.0f / (1 << bits);
 		float sum = 0.0f;
-		float filtered = src[0];
+		float filtered = 0.0f;
 		for (int i = 0; i < src.length; i++) {
 			sum = sum - filtered + src[i];
 			filtered = sum * mul;
