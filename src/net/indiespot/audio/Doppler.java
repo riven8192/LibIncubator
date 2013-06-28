@@ -1,0 +1,329 @@
+package net.indiespot.audio;
+
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
+import java.util.Arrays;
+
+import org.lwjgl.BufferUtils;
+import org.lwjgl.openal.AL;
+
+import craterstudio.math.EasyMath;
+import craterstudio.math.Vec2;
+import craterstudio.util.HighLevel;
+
+import static org.lwjgl.openal.AL10.*;
+
+public class Doppler {
+	public static interface Sampler {
+		public float sample(double t);
+	}
+
+	static final int hires = 4;
+	static final float uninited = -13371337.0f;
+	static final int sampleRate = 48000;
+	static final double soundDistancePerSecond = 334.0;
+	static final double soundDistancePerSample = soundDistancePerSecond / sampleRate;
+
+	private static void lowPassFilter(float[] src, float[] dst, int bits) {
+		float mul = 1.0f / (1 << bits);
+		float sum = 0.0f;
+		float filtered = src[0];
+		for (int i = 0; i < src.length; i++) {
+			sum = sum - filtered + src[i];
+			filtered = sum * mul;
+			dst[i] = filtered;
+		}
+	}
+
+	public static void main(String[] args) throws Exception {
+		Sampler noise = new Sampler() {
+
+			@Override
+			public float sample(double t) {
+				if (t < 0.0) {
+					return 0.0f;
+				}
+
+				float sum = 0.0f;
+				sum += Math.cos(t * 110 * (Math.PI * 2.0));
+				sum += Math.cos(t * 440 * (Math.PI * 2.0));
+				sum += Math.cos(t * 220 * (Math.PI * 2.0));
+				sum += Math.cos(t * 330 * (Math.PI * 2.0));
+				sum += Math.cos(t * 660 * (Math.PI * 2.0));
+				sum += Math.cos(t * 880 * (Math.PI * 2.0));
+				return sum;
+			}
+
+			private double pow(double v, double e) {
+				boolean isneg = v < 0.0;
+				v = Math.pow(isneg ? -v : +v, e);
+				return isneg ? -v : +v;
+			}
+		};
+
+		int bufferSampleCount = 1310;
+
+		if (false) {
+			float ref = noise.sample(0.0);
+			System.out.println(ref);
+			System.out.println(noise.sample(1118));
+			System.out.println(noise.sample(1310));
+			System.out.println(noise.sample(1311));
+
+			double t = 0.0;
+			for (int i = 0; i < 48000; i++) {
+				float sample = noise.sample(t) * 100;
+				t += 1.0 / sampleRate;
+
+				// if (i > 2000) {
+				float error = Math.abs(ref - sample);
+				if (i == 1310 || error < 0.1f) {
+					System.out.println("i=" + i + ", t=" + t + ", " + error);
+				}
+				// }
+			}
+			return;
+		}
+
+		float[] audioHF = new float[bufferSampleCount];
+		float[] composeL = new float[sampleRate * hires];
+		float[] composeR = new float[sampleRate * hires];
+		float[] renderL = new float[bufferSampleCount];
+		float[] renderR = new float[bufferSampleCount];
+
+		Arrays.fill(composeL, uninited);
+		Arrays.fill(composeR, uninited);
+
+		double t = 0.0;
+		for (int i = 0; i < audioHF.length; i++) {
+			audioHF[i] = noise.sample(t) * 100;
+			t += 1.0 / sampleRate;
+		}
+		{
+			EasyMath.map(audioHF, -1.0f, +1.0f);
+		}
+
+		float[] audioLF;
+		boolean lowpass = true;
+		if (lowpass) {
+			{
+				float min = Integer.MAX_VALUE;
+				float max = Integer.MIN_VALUE;
+				for (float v : audioHF) {
+					min = Math.min(min, v);
+					max = Math.max(max, v);
+				}
+				System.out.format("range: %f .. %f\n", min, max);
+			}
+
+			float[] audio4 = new float[audioHF.length * 4];
+			for (int i = 0; i < 4; i++) {
+				System.arraycopy(audioHF, 0, audio4, audioHF.length * i, audioHF.length);
+			}
+			float[] audio4lp = new float[audioHF.length * 4];
+			lowPassFilter(audio4, audio4lp, 5);
+			for (int i = 0; i < 1; i++) {
+				lowPassFilter(audio4lp, audio4, 5);
+				lowPassFilter(audio4, audio4lp, 3);
+			}
+
+			audioLF = Arrays.copyOfRange(audio4lp, audioHF.length * 1, audioHF.length * 2);
+			EasyMath.map(audioLF, -1.0f, +1.0f);
+		} else {
+			audioLF = audioHF.clone();
+		}
+
+		{
+			SampleVisualizer.show(768, 512, audioHF, audioLF);
+		}
+
+		float noiseMul = 140;
+		for (int i = 0; i < audioHF.length; i++) {
+			audioHF[i] *= noiseMul;
+			audioLF[i] *= noiseMul;
+		}
+
+		Vec2 earL = new Vec2(-0.075f, 0);
+		Vec2 earR = new Vec2(+0.075f, 0);
+		Vec2 vel = new Vec2(30 / 3.6f, 0);
+		Vec2 currPos = new Vec2(-25, 5);
+		Vec2 nextPos = new Vec2();
+
+		if (!true) {
+			currPos = new Vec2(-1, 2);
+			vel = new Vec2(0, 0);
+		}
+
+		float[] audioMix = audioHF.clone();
+
+		AL.create();
+		int alSource = alGenSources();
+		boolean init = true;
+		while (true) {
+			{
+				if (alGetSourcei(alSource, AL_SOURCE_STATE) != AL_PLAYING) {
+					alSourcePlay(alSource);
+				}
+
+				int queued = alGetSourcei(alSource, AL_BUFFERS_QUEUED);
+				if (queued > 3) {
+					int unused = alGetSourcei(alSource, AL_BUFFERS_PROCESSED);
+					if (unused > 0) {
+						IntBuffer buffers = BufferUtils.createIntBuffer(unused);
+						alSourceUnqueueBuffers(alSource, buffers);
+						while (buffers.hasRemaining()) {
+							alDeleteBuffers(buffers.get());
+						}
+					}
+
+					HighLevel.sleep(10);
+					continue;
+				}
+			}
+
+			// System.out.println();
+			System.out.println(currPos);
+
+			nextPos.load(vel);
+			nextPos.mul((float) audioHF.length / sampleRate);
+			nextPos.add(currPos);
+
+			float distance1 = Vec2.distance(earL, currPos);
+			float distance2 = Vec2.distance(earL, nextPos);
+			float avgDistance = (distance1 + distance2) * 0.5f;
+
+			final float maxD = 25;
+			final float minD = 10;
+			float[] audio;
+			if (avgDistance < minD) {
+				audio = audioHF;
+			} else if (avgDistance > maxD) {
+				audio = audioLF;
+			} else {
+				for (int i = 0; i < audioMix.length; i++) {
+					audioMix[i] = EasyMath.map(avgDistance, minD, maxD, audioHF[i], audioLF[i]);
+				}
+				audio = audioMix;
+			}
+
+			long t1 = System.currentTimeMillis();
+
+			doppler(audio, composeL, 0, earL, currPos, nextPos);
+			doppler(audio, composeR, 0, earR, currPos, nextPos);
+
+			long t2 = System.currentTimeMillis();
+
+			sampleDown(composeL, 0, renderL);
+			sampleDown(composeR, 0, renderR);
+			compactClear(composeL, audioHF.length * hires);
+			compactClear(composeR, audioHF.length * hires);
+
+			long t3 = System.currentTimeMillis();
+
+			// System.out.println("fill took: " + (t2 - t1) + "ms");
+			// System.out.println("comp took: " + (t3 - t2) + "ms");
+
+			currPos.load(nextPos);
+
+			//
+
+			ByteBuffer sampleBuffer = toBuf(renderL, renderR, 0, audioHF.length);
+			int alBuffer = alGenBuffers();
+			alBufferData(alBuffer, AL_FORMAT_STEREO16, sampleBuffer, sampleRate);
+			alSourceQueueBuffers(alSource, alBuffer);
+
+			if (init) {
+				alSourcePlay(alSource);
+			}
+			init = false;
+		}
+
+		// alDeleteBuffers(alBuffer);
+		// alDeleteSources(alSource);
+		// AL.destroy();
+	}
+
+	private static final Vec2 tmp2d = new Vec2();
+
+	private static void compactClear(float[] samples, int off) {
+		final int end = samples.length - off;
+		System.arraycopy(samples, off, samples, 0, end);
+		Arrays.fill(samples, end, samples.length, uninited);
+	}
+
+	private static final void doppler(float[] lowresInput, float[] highresOutput, int off, Vec2 ear, Vec2 pos1, Vec2 pos2) {
+
+		// do the following, but with increased resolution:
+		// ..
+		// create N sound sources
+		// these all emit sound at the same time
+		// but are progressively further away
+		// so that the sound reaches us in a stream of samples
+
+		final int sources = lowresInput.length * hires;
+		for (int i = 0; i < sources; i++) {
+			float ratio = (float) i / (sources - 1);
+			double logicalDistance = soundDistancePerSample * i / hires;
+
+			tmp2d.x = EasyMath.lerp(pos1.x, pos2.x, ratio);
+			tmp2d.y = EasyMath.lerp(pos1.y, pos2.y, ratio);
+			float realDistance = Vec2.distance(ear, tmp2d);
+			logicalDistance += realDistance;
+
+			int srcIndex = i / hires;
+			int dstIndex = off + (int) (logicalDistance / soundDistancePerSample * hires);
+
+			if (dstIndex >= highresOutput.length) {
+				// reached end of write buffer: sample too far in the future
+				break;
+			}
+
+			float sample = lowresInput[srcIndex];
+			// attenuation
+			sample /= realDistance * realDistance;
+			highresOutput[dstIndex] = sample;
+		}
+	}
+
+	private static float saturate(float value) {
+		boolean isneg = value < 0.0f;
+		float negVolume = isneg ? value : -value;
+		value = (float) (1.0 - Math.exp(negVolume * 0.1));
+		return value * (isneg ? -1 : +1);
+	}
+
+	private static final void sampleDown(float[] highresInput, int off, float[] lowresOutput) {
+		for (int i = 0; i < lowresOutput.length; i++) {
+			float sum = 0.0f;
+			int filledCount = 0;
+			for (int k = 0; k < hires; k++) {
+				float sample = highresInput[off + i * hires + k];
+				if (sample != uninited) {
+					sum += sample;
+					filledCount++;
+				}
+			}
+			float volume = (filledCount == 0) ? 0.0f : (sum / filledCount);
+			lowresOutput[i] = saturate(volume);
+		}
+	}
+
+	private static final ByteBuffer toBuf(float[] data, int off, int len) {
+		ByteBuffer sampleBuffer = BufferUtils.createByteBuffer(len * 2);
+		for (int i = 0; i < len; i++) {
+			sampleBuffer.putShort((short) (data[off + i] * Short.MAX_VALUE));
+		}
+		sampleBuffer.flip();
+		return sampleBuffer;
+	}
+
+	private static final ByteBuffer toBuf(float[] dataL, float[] dataR, int off, int len) {
+		ByteBuffer sampleBuffer = BufferUtils.createByteBuffer(len * 2 * 2);
+		for (int i = 0; i < len; i++) {
+			sampleBuffer.putShort((short) (dataL[off + i] * Short.MAX_VALUE));
+			sampleBuffer.putShort((short) (dataR[off + i] * Short.MAX_VALUE));
+		}
+		sampleBuffer.flip();
+		return sampleBuffer;
+	}
+}
