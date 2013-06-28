@@ -120,7 +120,7 @@ public class Doppler {
 		boolean stationary = false;
 		Vec2 earL = new Vec2(-0.075f, 0);
 		Vec2 earR = new Vec2(+0.075f, 0);
-		Vec2 vel = new Vec2(30 / 3.6f, 0);
+		Vec2 vel = new Vec2(20 / 3.6f, 0);
 		Vec2 currPos = new Vec2(-25, 5);
 		Vec2 nextPos = new Vec2();
 
@@ -132,7 +132,10 @@ public class Doppler {
 		AL.create();
 		int alSource = alGenSources();
 		while (true) {
+
+			// crappy OpenAL code
 			{
+
 				if (alGetSourcei(alSource, AL_SOURCE_STATE) != AL_PLAYING) {
 					alSourcePlay(alSource);
 				}
@@ -167,37 +170,31 @@ public class Doppler {
 			float avgDistance = (distance1 + distance2) * 0.5f;
 
 			final float lfDistance = 25;
-			final float hfDistance = 10;
+			final float hfDistance = 5;
 			float[] audio;
 			if (avgDistance < hfDistance) {
 				audio = audioHF;
 			} else if (avgDistance > lfDistance) {
 				audio = audioLF;
 			} else {
+				float ratio = EasyMath.invLerp(avgDistance, hfDistance, lfDistance);
 				for (int i = 0; i < audioMix.length; i++) {
-					audioMix[i] = EasyMath.map(avgDistance, hfDistance, lfDistance, audioHF[i], audioLF[i]);
+					audioMix[i] = EasyMath.lerp(audioHF[i], audioLF[i], ratio);
 				}
 				audio = audioMix;
 			}
 
-			long t1 = System.currentTimeMillis();
-
 			// scatter audio samples into future
-			doppler(audio, composeL, 0, earL, currPos, nextPos);
-			doppler(audio, composeR, 0, earR, currPos, nextPos);
-
-			long t2 = System.currentTimeMillis();
+			scatterAudioSamples(audio, composeL, 0, earL, currPos, nextPos);
+			scatterAudioSamples(audio, composeR, 0, earR, currPos, nextPos);
 
 			// gather audio samples from future
-			sampleDown(composeL, 0, renderL);
-			sampleDown(composeR, 0, renderR);
+			gatherAudioSamples(composeL, 0, renderL);
+			gatherAudioSamples(composeR, 0, renderR);
+
+			// discard used composed samples
 			compactClear(composeL, audio.length * hires);
 			compactClear(composeR, audio.length * hires);
-
-			long t3 = System.currentTimeMillis();
-
-			// System.out.println("fill took: " + (t2 - t1) + "ms");
-			// System.out.println("comp took: " + (t3 - t2) + "ms");
 
 			// advance our location
 			currPos.load(nextPos);
@@ -222,13 +219,13 @@ public class Doppler {
 		Arrays.fill(samples, end, samples.length, uninited);
 	}
 
-	private static final void doppler(float[] lowresInput, float[] highresOutput, int off, Vec2 ear, Vec2 pos1, Vec2 pos2) {
+	private static final void scatterAudioSamples(float[] lowresInput, float[] highresOutput, int off, Vec2 ear, Vec2 pos1, Vec2 pos2) {
 
 		// do the following, but with increased resolution:
 		// ..
 		// create N sound sources
 		// these all emit sound at the same time
-		// but are progressively further away
+		// but are progressively further away (causing latency)
 		// so that the sound reaches us in a stream of samples
 
 		final int sources = lowresInput.length * hires;
@@ -263,7 +260,7 @@ public class Doppler {
 		return value * (isneg ? -1 : +1);
 	}
 
-	private static final void sampleDown(float[] highresInput, int off, float[] lowresOutput) {
+	private static final void gatherAudioSamples(float[] highresInput, int off, float[] lowresOutput) {
 		for (int i = 0; i < lowresOutput.length; i++) {
 			float sum = 0.0f;
 			int filledCount = 0;
