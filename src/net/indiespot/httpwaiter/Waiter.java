@@ -210,7 +210,7 @@ public class Waiter {
 				}
 			}
 
-			static final int max_msg_count = 32;
+			static final int max_bulkmsg_size = 64 * 1024;
 
 			private void sendBadRequest(Request request) {
 				String firstLine = "HTTP/1.1 400 Bad Request";
@@ -301,26 +301,21 @@ public class Waiter {
 					if (method.equals("GET")) {
 						final int offMsgId = Integer.parseInt(actionParts[3]);
 
-						List<byte[]> pendingMessages = new ArrayList<>();
-						for (int i = 0; i < max_msg_count; i++) {
-							byte[] message = channel_storage.getMessage(channel, offMsgId + i);
-							if (message == null)
-								break;
-
-							pendingMessages.add(message);
-						}
-
-						if (!pendingMessages.isEmpty()) {
+						if (channel_storage.getMessage(channel, offMsgId) != null) {
 							String firstLine = "HTTP/1.1 200 OK";
 							Map<String, String> headerLines = new HashMap<>();
 							headerLines.put("Content-Type", "text/plain");
 							ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
 							try {
-								for (int i = 0; i < pendingMessages.size(); i++) {
+								for (int i = 0; baos.size() < max_bulkmsg_size; i++) {
+									byte[] message = channel_storage.getMessage(channel, offMsgId + i);
+									if (message == null)
+										break;
+
 									if (i != 0)
 										baos.write(utf8("\n"));
-									baos.write(pendingMessages.get(i));
+									baos.write(message);
 								}
 							} catch (IOException e) {
 								throw new IllegalStateException(e);
