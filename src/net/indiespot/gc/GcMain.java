@@ -45,14 +45,14 @@ public class GcMain {
 	}
 
 	public static void main(String[] args) {
-		if (!true) {
-			for (int i = 1; i <= 1025; i++) {
-				int pot = GcManagedMemory.roundUpToPowerOfTwo(i);
-				System.out.println(i + " -> " + pot + " -> " + GcManagedMemory.log2(pot));
-			}
-
-			return;
-		}
+//		if (!true) {
+//			for (int i = 1; i <= 1025; i++) {
+//				int pot = GcManagedMemory.roundUpToPowerOfTwo(i);
+//				System.out.println(i + " -> " + pot + " -> " + GcManagedMemory.log2(pot));
+//			}
+//
+//			return;
+//		}
 
 		int memorySize;
 		int heapSize;
@@ -73,29 +73,29 @@ public class GcMain {
 
 		GcMemory memory = new GcMemory(memorySize, heapSize);
 
-		if (!true) {
-			GcManagedMemory managed = new GcManagedMemory(memory, 1024, 32);
-			int pntr1 = managed.malloc(1);
-			int pntr2 = managed.malloc(1);
-			int pntr3 = managed.malloc(2);
-			int pntr4 = managed.malloc(2);
-			int pntr5 = managed.malloc(3);
-			int pntr6 = managed.malloc(3);
-			int pntr7 = managed.malloc(4);
-
-			managed.free(pntr1);
-			managed.free(pntr2);
-			// managed.free(pntr3);
-			// managed.free(pntr4);
-			managed.free(pntr5);
-			managed.free(pntr6);
-
-			managed.tidy();
-
-			managed.malloc(4);
-
-			return;
-		}
+//		if (!true) {
+//			GcManagedMemory managed = new GcManagedMemory(memory, 1024, 32);
+//			int pntr1 = managed.malloc(1);
+//			int pntr2 = managed.malloc(1);
+//			int pntr3 = managed.malloc(2);
+//			int pntr4 = managed.malloc(2);
+//			int pntr5 = managed.malloc(3);
+//			int pntr6 = managed.malloc(3);
+//			int pntr7 = managed.malloc(4);
+//
+//			managed.free(pntr1);
+//			managed.free(pntr2);
+//			// managed.free(pntr3);
+//			// managed.free(pntr4);
+//			managed.free(pntr5);
+//			managed.free(pntr6);
+//
+//			managed.tidy();
+//
+//			managed.malloc(4);
+//
+//			return;
+//		}
 
 		List<GcHeap> heaps = createHeaps(memory);
 		System.out.println("heaps: " + heaps.size());

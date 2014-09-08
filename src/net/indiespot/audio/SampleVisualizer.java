@@ -41,6 +41,7 @@ public class SampleVisualizer {
 
 		System.out.println("UI range: " + min + " .. " + max);
 
+		@SuppressWarnings("serial")
 		JPanel panel = new JPanel() {
 			@Override
 			protected void paintComponent(Graphics g) {

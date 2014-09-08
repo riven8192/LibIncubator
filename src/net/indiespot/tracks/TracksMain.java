@@ -69,6 +69,7 @@ public class TracksMain {
 			wagon2.setPosition(900.0f);
 		}
 
+		@SuppressWarnings("serial")
 		JPanel panel = new JPanel() {
 
 			@Override
