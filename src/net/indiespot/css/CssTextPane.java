@@ -25,10 +25,6 @@ import javax.swing.text.StyledDocument;
 import java.util.LinkedList;
 
 public class CssTextPane {
-	public static void main(String[] args) {
-		CssTextPaneTest.main(args);
-	}
-
 	private static class SyntaxElement {
 		Pattern pattern;
 		int group;

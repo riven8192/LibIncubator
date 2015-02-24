@@ -1,0 +1,94 @@
+<html>
+	<head>
+		<link type="text/css" href="/channel.css" media="all" rel="stylesheet"/>
+		<script type="text/javascript" src="/channel.js"></script>
+		<script type="text/javascript">
+
+
+
+	
+var waiter;
+
+function doLoad() {
+	waiter = new Waiter("${user}");
+	waiter.onMessageReceived = function( msgId, msgBody ) {
+		if(msgBody.startsWith('CNF_')) {
+			msgBody = msgBody.substring(4);
+			msgBody = h2s(msgBody);
+			
+			var io = msgBody.indexOf(':');
+			if(io !== -1) {
+				var channel = msgBody.substring(0, io);
+				var msgId   = msgBody.substring(io + 1);
+				
+				var msgElem = document.getElementById('msg_'+channel+'_'+msgId+'_outbox');
+				if(msgElem) {
+					msgElem.className += ' confirmed';
+				}
+			}
+		}
+	};
+	waiter.listen();
+}
+
+function doPost() {
+	var rcpt = document.getElementById('rcpt').value;
+	var type = document.getElementById('type').value;
+	var msg  = document.getElementById('msg').value;
+	
+	
+	var msgBody = type+'_'+s2h(msg);
+	var msgElem = document.createElement('DIV');
+	msgElem.className = 'msg delivery';
+	convertMsgToElem(msgBody, msgElem);
+	
+	log.prependChild(msgElem);
+	
+	
+	
+	waiter.sendMessage(rcpt, 'some-token', msgBody,
+	   function( channel, msg, responseText ) {
+		var msgId = responseText;
+		msgElem.id = "msg_"+channel+"_"+msgId+"_outbox";
+		msgElem.className += ' success';
+	}, function() {
+		msgElem.className += ' failure';
+	});
+}
+
+function doHide() {
+	var channel = document.getElementById('channel').value;
+	var msgId   = document.getElementById('msgId').value;
+	
+	var msgBody = 'HID_'+s2h(msgId);
+	waiter.sendMessage(channel, msgBody,
+	   function( channel, msg, responseText ) {
+		
+	}, function() {
+		
+	});
+}
+
+		</script>
+	</head>
+	<body onload="doLoad()">
+		<form id="post_form" onsubmit="doPost(); return false;">
+			<input id="rcpt" type="text"/>
+			<select id="type">
+				<option value="TXT">text</option>
+				<option value="URL">link</option>
+				<option value="IMG">image</option>
+			</select>
+			<input id="msg" type="text"/>
+			<input type="submit"/>
+		</form>
+		<hr/>
+		<form id="post_form" onsubmit="doHide(); return false;">
+			<input id="channel" type="text"/>
+			<input id="msgId" type="text"/>
+			<input type="submit"/>
+		</form>
+		<div id="log">
+		</div>
+	</body>
+</html>

@@ -1,0 +1,88 @@
+<html>
+	<head>
+		<link type="text/css" href="/channel.css" media="all" rel="stylesheet"/>
+		<script type="text/javascript" src="/channel.js"></script>
+		<script type="text/javascript">
+
+
+
+	
+var waiter;
+
+function doLoad() {
+	waiter = new Waiter("${user}");
+	waiter.onMessageReceived = function( msgId, msgBody ) {
+		console.log('recv: '+msgId+'/'+msgBody);
+		
+		var holderElem = document.createElement('DIV');
+		holderElem.id = "msg_"+waiter.channel+"_"+msgId+"_inbox";
+		holderElem.className = "holder received";
+	
+		var msgElem = document.createElement('DIV');
+		msgElem.className = 'msg';
+		
+		if(msgBody.startsWith('TXT_') ||
+		   msgBody.startsWith('URL_') ||
+		   msgBody.startsWith('IMG_')) {
+			convertMsgToElem(msgBody, msgElem);
+		}
+		else if(msgBody.startsWith('CNF_') ||
+		        msgBody.startsWith('HID_')) {
+			var msgCmd = msgBody.substring(0, 3);
+			msgBody = msgBody.substring(4);
+			
+			var msgId = h2s(msgBody);
+			var holderElem = document.getElementById('msg_'+waiter.channel+'_'+msgId+'_inbox');
+			if(holderElem) {
+				if(msgCmd.startsWith('CNF')) {
+					holderElem.className += ' confirmed';
+				}
+				if(msgCmd.startsWith('HID')) {
+					holderElem.parentNode.removeChild(holderElem);
+				}
+			}
+			
+			return;
+		}
+		else {
+			// ??
+			console.log(msgBody);
+			return;
+		}	
+		
+		var cnfElem = document.createElement('DIV');
+		cnfElem.className = "confirm";
+		cnfElem.innerHTML = "<button onclick='doConfirm(\""+waiter.channel+"\", "+msgId+")'>ik heb dit gelezen</button>";
+		
+		holderElem.appendChild(msgElem);
+		holderElem.appendChild(cnfElem);
+
+		
+		document.getElementById('stream').prependChild(holderElem);
+	};
+	
+	waiter.requestOffset(function( msgId ) {
+		waiter.offMsgId = msgId;
+		waiter.listen();
+	});	
+}
+
+function doConfirm( channel, msgId ) {
+	waiter.sendMessage(
+	 channel,
+	 'some-token',
+	 'CNF_'+s2h(msgId)
+	 , function() {
+		
+	}, function() {
+		
+	});
+}
+
+		</script>
+	</head>
+	<body onload="doLoad()">
+		<div id="stream">
+		</div>
+	</body>
+</html>

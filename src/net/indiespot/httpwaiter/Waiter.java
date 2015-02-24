@@ -1,171 +1,41 @@
 package net.indiespot.httpwaiter;
 
-import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
-import java.io.EOFException;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class Waiter {
-	static class Request {
-		final Connection conn;
-		final String firstLine;
-		final Map<String, String> headerLines;
-
-		public Request(Connection conn, String firstLine, Map<String, String> headerLines) {
-			this.conn = conn;
-			this.firstLine = firstLine;
-			this.headerLines = headerLines;
-		}
-	}
-
-	static class Response {
-		final Connection conn;
-		final String firstLine;
-		final Map<String, String> headerLines;
-		final byte[] content;
-
-		public Response(Connection conn, String firstLine, Map<String, String> headerLines, byte[] content) {
-			this.conn = conn;
-			this.firstLine = firstLine;
-			this.headerLines = headerLines;
-			this.content = content;
-		}
-	}
-
-	//
-
-	private static interface ChannelStorage {
-		public int addMessage(String channel, byte[] message);
-
-		public byte[] getMessage(String channel, int idx);
-	}
-
-	private static class MemoryChannelStorage implements ChannelStorage {
-		private final Map<String, List<byte[]>> channel2messages = new HashMap<>();
-
-		@Override
-		public int addMessage(String channel, byte[] message) {
-			List<byte[]> messages = channel2messages.get(channel);
-			if (messages == null)
-				channel2messages.put(channel, messages = new ArrayList<>());
-			messages.add(message);
-			return messages.size() - 1;
-		}
-
-		@Override
-		public byte[] getMessage(String channel, int idx) {
-			List<byte[]> messages = channel2messages.get(channel);
-			if (messages == null)
-				return null;
-			if (idx < 0 || idx >= messages.size())
-				return null;
-			return messages.get(idx);
-		}
-	}
-
-	//
-
-	private static interface ChannelListeners {
-		public void register(String channel, Connection connection);
-
-		public void unregister(String channel, Connection connection);
-
-		public List<Connection> getListeners(String channel);
-	}
-
-	private static class BasicChannelListeners implements ChannelListeners {
-		private final Map<String, List<Connection>> channel2listeners = new HashMap<>();
-
-		@Override
-		public void register(String channel, Connection connection) {
-			List<Connection> listeners = channel2listeners.get(channel);
-			if (listeners == null)
-				channel2listeners.put(channel, listeners = new ArrayList<>());
-			listeners.add(connection);
-		}
-
-		@Override
-		public void unregister(String channel, Connection connection) {
-			List<Connection> listeners = channel2listeners.get(channel);
-			if (listeners == null)
-				throw new IllegalStateException();
-			if (!listeners.remove(connection))
-				throw new IllegalStateException();
-		}
-
-		@Override
-		public List<Connection> getListeners(String channel) {
-			return new ArrayList<>(channel2listeners.get(channel));
-		}
-	}
-
-	//
-
-	private static interface GroupManager {
-		public void add(String group, String member);
-
-		public void remove(String group, String member);
-
-		public Set<String> list(String group);
-	}
-
-	private static class BasicGroupManager implements GroupManager {
-
-		private final Map<String, Set<String>> group2members = new HashMap<>();
-
-		@Override
-		public void add(String group, String member) {
-			Set<String> members = group2members.get(group);
-			if (members == null)
-				group2members.put(group, members = new HashSet<>());
-			members.add(member);
-		}
-
-		@Override
-		public void remove(String group, String member) {
-			Set<String> members = group2members.get(group);
-			if (members == null)
-				throw new IllegalStateException();
-			if (!members.remove(member))
-				throw new IllegalStateException();
-		}
-
-		@Override
-		public Set<String> list(String group) {
-			return group2members.get(group);
-		}
-	}
-
-	//
-
 	static final ArrayBlockingQueue<Runnable> runnable_queue = new ArrayBlockingQueue<>(1000);
 	static final ArrayBlockingQueue<Request> request_queue = new ArrayBlockingQueue<>(1000);
 	static final ArrayBlockingQueue<Response> response_queue = new ArrayBlockingQueue<>(1000);
 
-	static final ChannelStorage channel_storage = new MemoryChannelStorage();
-	static final ChannelListeners channel_listeners = new BasicChannelListeners();
-	static final GroupManager group_manager = new BasicGroupManager();
+	static final ChannelStorage channel_storage;
+	static final ChannelListeners channel_listeners;
+	static final GroupManager group_manager;
+	static final ResourceLoader resource_loader;
+	static final TokenManager token_manager;
+
+	static {
+		try {
+			channel_storage = (ChannelStorage) Class.forName(System.getProperty("channel.storage.impl")).newInstance();
+			channel_listeners = (ChannelListeners) Class.forName(System.getProperty("channel.listeners.impl")).newInstance();
+			group_manager = (GroupManager) Class.forName(System.getProperty("group.manager.impl")).newInstance();
+			resource_loader = (ResourceLoader) Class.forName(System.getProperty("resource.loader.impl")).newInstance();
+			token_manager = (TokenManager) Class.forName(System.getProperty("token.manager.impl")).newInstance();
+		} catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
+			throw new IllegalStateException(e);
+		}
+	}
 
 	private static void register(Connection conn, String channel) {
 		if (conn.channel != null)
@@ -240,7 +110,7 @@ public class Waiter {
 				String[] parts = request.firstLine.split(" ");
 				String method = parts[0];
 				String action = parts[1];
-				String version = parts[2];
+				// String version = parts[2];
 
 				if (action.startsWith("/group/")) {
 					String[] actionParts = action.split("/");
@@ -289,6 +159,25 @@ public class Waiter {
 						this.sendOK(request);
 						return;
 					}
+				} else if (action.startsWith("/offset/")) {
+					String[] actionParts = action.split("/");
+					if (actionParts.length <= 2) {
+						this.sendBadRequest(request);
+						return;
+					}
+
+					String channel = actionParts[2];
+
+					int idx = channel_storage.getLatestMessageIndex(channel);
+
+					String firstLine = "HTTP/1.1 200 OK";
+					Map<String, String> headerLines = new HashMap<>();
+					headerLines.put("Content-Type", "text/plain");
+
+					byte[] message = utf8(String.valueOf(idx));
+					
+					enqueue(response_queue, new Response(request.conn, firstLine, headerLines, message));
+					return;
 				} else if (action.startsWith("/channel/")) {
 					String[] actionParts = action.split("/");
 					if (actionParts.length <= 2) {
@@ -331,12 +220,19 @@ public class Waiter {
 					}
 
 					if (method.equals("POST")) {
-						if (actionParts.length <= 3) {
+						if (actionParts.length <= 4) {
 							this.sendBadRequest(request);
 							return;
 						}
 
-						byte[] message = utf8(actionParts[3]);
+						String postToken = actionParts[3];
+						byte[] message = utf8(actionParts[4]);
+
+						String userId = "123";
+						if (!token_manager.verifyPostTokenForChannel(channel, userId, postToken)) {
+							this.sendBadRequest(request);
+							return;
+						}
 
 						int msgId = channel_storage.addMessage(channel, message);
 
@@ -365,49 +261,13 @@ public class Waiter {
 					}
 				} else if (method.equals("GET")) {
 					if (action.equals("/channel.css")) {
-						byte[] message;
-						{
-							File f = new File("D:/channel.css");
-							if (!f.exists())
-								f = new File("./channel.css");
-
-							try (InputStream in = new FileInputStream(f)) {
-								ByteArrayOutputStream baos = new ByteArrayOutputStream();
-								byte[] tmp = new byte[1024];
-								for (int got; (got = in.read(tmp)) != -1;) {
-									baos.write(tmp, 0, got);
-								}
-								message = baos.toByteArray();
-							} catch (IOException e) {
-								e.printStackTrace();
-								return;
-							}
-						}
-
+						byte[] message = resource_loader.load(action);
 						String firstLine = "HTTP/1.1 200 OK";
 						Map<String, String> headerLines = new HashMap<>();
 						headerLines.put("Content-Type", "text/css");
 						enqueue(response_queue, new Response(request.conn, firstLine, headerLines, message));
 					} else if (action.equals("/channel.js")) {
-						byte[] message;
-						{
-							File f = new File("D:/channel.js");
-							if (!f.exists())
-								f = new File("./channel.js");
-
-							try (InputStream in = new FileInputStream(f)) {
-								ByteArrayOutputStream baos = new ByteArrayOutputStream();
-								byte[] tmp = new byte[1024];
-								for (int got; (got = in.read(tmp)) != -1;) {
-									baos.write(tmp, 0, got);
-								}
-								message = baos.toByteArray();
-							} catch (IOException e) {
-								e.printStackTrace();
-								return;
-							}
-						}
-
+						byte[] message = resource_loader.load(action);
 						String firstLine = "HTTP/1.1 200 OK";
 						Map<String, String> headerLines = new HashMap<>();
 						headerLines.put("Content-Type", "text/javascript");
@@ -418,36 +278,21 @@ public class Waiter {
 							this.sendBadRequest(request);
 							return;
 						}
-						String user = actionParts[2];
+						StringBuilder user = new StringBuilder();
+						for (char c : actionParts[2].toCharArray())
+							if (false || //
+									(c >= 'a' && c <= 'z') || //
+									(c >= 'A' && c <= 'Z') || //
+									(c >= '0' && c <= '9') || //
+									(c == '-' || c == '_' || c == '.' || c == '@'))
+								user.append(c);
+
+						byte[] message = resource_loader.load("channel_view.html");
+						message = utf8(utf8(message).replace("${user}", user));
 
 						String firstLine = "HTTP/1.1 200 OK";
 						Map<String, String> headerLines = new HashMap<>();
-						headerLines.put("Content-Type", "text/html");
-
-						byte[] message;
-						{
-							File f = new File("D:/channel_view.html");
-							if (!f.exists())
-								f = new File("./channel_view.html");
-
-							try (InputStream in = new FileInputStream(f)) {
-								ByteArrayOutputStream baos = new ByteArrayOutputStream();
-								byte[] tmp = new byte[1024];
-								for (int got; (got = in.read(tmp)) != -1;) {
-									baos.write(tmp, 0, got);
-								}
-								message = baos.toByteArray();
-
-								String html = utf8(message);
-								html = html.replace("${user}", user);
-
-								message = utf8(html);
-							} catch (IOException e) {
-								e.printStackTrace();
-								return;
-							}
-						}
-
+						headerLines.put("Content-Type", "text/html; charset=utf-8");
 						enqueue(response_queue, new Response(request.conn, firstLine, headerLines, message));
 					} else if (action.startsWith("/post/")) {
 						String[] actionParts = action.split("/");
@@ -455,36 +300,21 @@ public class Waiter {
 							this.sendBadRequest(request);
 							return;
 						}
-						String user = actionParts[2];
+						StringBuilder user = new StringBuilder();
+						for (char c : actionParts[2].toCharArray())
+							if (false || //
+									(c >= 'a' && c <= 'z') || //
+									(c >= 'A' && c <= 'Z') || //
+									(c >= '0' && c <= '9') || //
+									(c == '-' || c == '_' || c == '.' || c == '@'))
+								user.append(c);
+
+						byte[] message = resource_loader.load("channel_post.html");
+						message = utf8(utf8(message).replace("${user}", user));
 
 						String firstLine = "HTTP/1.1 200 OK";
 						Map<String, String> headerLines = new HashMap<>();
-						headerLines.put("Content-Type", "text/html");
-
-						byte[] message;
-						{
-							File f = new File("D:/channel_post.html");
-							if (!f.exists())
-								f = new File("./channel_post.html");
-
-							try (InputStream in = new FileInputStream(f)) {
-								ByteArrayOutputStream baos = new ByteArrayOutputStream();
-								byte[] tmp = new byte[1024];
-								for (int got; (got = in.read(tmp)) != -1;) {
-									baos.write(tmp, 0, got);
-								}
-								message = baos.toByteArray();
-
-								String html = utf8(message);
-								html = html.replace("${user}", user);
-
-								message = utf8(html);
-							} catch (IOException e) {
-								e.printStackTrace();
-								return;
-							}
-						}
-
+						headerLines.put("Content-Type", "text/html; charset=utf-8");
 						enqueue(response_queue, new Response(request.conn, firstLine, headerLines, message));
 					} else {
 						this.sendNotFound(request);
@@ -568,83 +398,6 @@ public class Waiter {
 					}
 				});
 			}
-		}
-	}
-
-	static class Connection {
-		static final AtomicInteger ID_GEN = new AtomicInteger();
-		volatile boolean isOpen;
-		volatile boolean isSending;
-		final int id;
-		final Socket socket;
-		final BufferedReader br;
-		final OutputStream out;
-		String channel;
-
-		public Connection(Socket socket) throws IOException {
-			final int bufSize = 1024;
-
-			this.id = ID_GEN.incrementAndGet();
-
-			this.socket = socket;
-			this.socket.setSoTimeout(10_000);
-			this.socket.setReceiveBufferSize(bufSize);
-			this.socket.setSendBufferSize(bufSize);
-
-			this.br = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"), bufSize);
-			this.out = new BufferedOutputStream(socket.getOutputStream(), bufSize);
-
-			this.isOpen = true;
-			this.isSending = false;
-
-			this.readHeader();
-		}
-
-		void readHeader() throws IOException {
-			String firstLine = null;
-			Map<String, String> headerLines = new HashMap<>();
-
-			while (true) {
-				String line = br.readLine();
-				System.out.println("request[" + id + "]: " + line);
-
-				if (line == null)
-					throw new EOFException();
-
-				if (line.isEmpty())
-					break;
-
-				if (firstLine == null) {
-					firstLine = line;
-				} else {
-					int io = line.indexOf(':');
-					if (io == -1)
-						throw new IllegalStateException();
-					headerLines.put(line.substring(0, io).trim(), line.substring(io + 1).trim());
-				}
-			}
-
-			enqueue(request_queue, new Request(this, firstLine, headerLines));
-		}
-
-		void writeResponse(String firstLine, Map<String, String> headerLines, byte[] content) throws IOException {
-			StringBuilder header = new StringBuilder();
-			header.append(firstLine).append("\r\n");
-			for (Entry<String, String> entry : headerLines.entrySet()) {
-				header.append(entry.getKey() + ": " + entry.getValue() + "\r\n");
-			}
-			header.append("Content-Length: " + content.length + "\r\n");
-			header.append("\r\n");
-
-			System.out.println("response[" + id + "]:");
-			System.out.println("----");
-			System.out.println(header.toString());
-			System.out.println("----");
-
-			out.write(utf8(header.toString()));
-			out.write(content);
-			// out.write(utf8("\r\n"));
-			out.flush();
 		}
 	}
 

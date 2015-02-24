@@ -8,14 +8,14 @@ public class Node {
 
 	public final long id;
 	public Object attachment;
-	public final List<Edge> edges;
-	public final List<Edge> trace;
+	public final List<Edge> outEdges;
+	public final List<Edge> inEdges;
 
 	public Node(Object attachment) {
 		this.id = ++id_gen;
 		this.attachment = attachment;
-		this.edges = new ArrayList<>();
-		this.trace = new ArrayList<>();
+		this.outEdges = new ArrayList<>();
+		this.inEdges = new ArrayList<>();
 	}
 
 	@Override

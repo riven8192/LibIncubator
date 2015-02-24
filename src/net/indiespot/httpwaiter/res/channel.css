@@ -1,0 +1,85 @@
+body
+{
+	padding: 4px;
+	margin: 0px;
+	background-color: black;
+}
+
+
+
+div.msg.type_txt,
+div.msg.type_url
+{
+   padding: 12px;
+   width: 376px;
+}
+
+div.msg.type_img
+{
+   padding: 0px;
+   width: 400px;
+}
+
+
+div.holder
+{
+   margin: 4px;
+   width: 400px;
+}
+
+div.holder.delivery
+{
+   background-color: #fff;
+   border: 1px solid blue;
+}
+
+div.holder.delivery.failure
+{
+   background-color: #fcc;
+   border: 1px solid #f88;
+}
+
+div.holder.delivery.success
+{
+   background-color: #4c8;
+   border: 1px solid #284;
+}
+
+div.holder.delivery.success.confirmed
+{
+   background-color: #48c;
+   border: 1px solid #248;
+}
+
+
+
+
+div.holder.received
+{
+   background-color: #cfc;
+   border: 1px solid #8f8;
+}
+
+div.holder.received.confirmed
+{
+   background-color: #8cf;
+   border: 1px solid #48f;
+}
+
+
+
+
+div.holder div.confirm
+{
+	padding: 0px 20px 8px 20px;
+}
+
+div.holder.received div.confirm 
+{
+	text-align: right;
+}
+
+div.holder.received.confirmed div.confirm
+{
+   display: none;
+}
