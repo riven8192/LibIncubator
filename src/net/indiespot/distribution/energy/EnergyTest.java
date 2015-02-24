@@ -23,7 +23,7 @@ public class EnergyTest {
 		c.maxInboundFlow = 1;
 		Pole p5 = new Pole(1, 11, c);
 		Pole p6 = new Pole(1, 12, null);
-		Pole p7 = new Pole(1, 13, new Resource(ResourceType.ELECTRICITY, 0, 10));
+		Pole p7 = new Pole(1, 13, new Consumer(ResourceType.ELECTRICITY, 3, 2, 10));
 
 		Wire.twoWay(p1, p2, 1.0f);
 		Wire.twoWay(p2, p3, 1.0f);
@@ -48,27 +48,38 @@ public class EnergyTest {
 
 		List<Pole> generators = new ArrayList<>();
 		List<Pole> batteries = new ArrayList<>();
+		List<Consumer> consumers = new ArrayList<>();
 
 		for (Pole pole : poles) {
-			if (pole.attachment instanceof Generator) {
+			if (pole.attachment instanceof Generator)
 				generators.add(pole);
-			}
-			if (pole.attachment instanceof Battery) {
+			else if (pole.attachment instanceof Battery)
 				batteries.add(pole);
-			}
+			else if (pole.attachment instanceof Consumer)
+				consumers.add((Consumer) pole.attachment);
 		}
 
-		for (int i = 0; i < 5; i++) {
+		for (int i = 0; i < 10; i++) {
 			System.out.println("---");
 
 			for (Pole pole : generators) {
-				distribute(pole, ((Generator) pole.attachment).generate());
+				Generator generator = (Generator) pole.attachment;
+				Resource generated = generator.generate();
+				if (generated != null)
+					distribute(pole, generated);
 			}
 
 			System.out.println("-");
 
 			for (Pole pole : batteries) {
-				distribute(pole, (Battery) pole.attachment);
+				Battery battery = (Battery) pole.attachment;
+				distribute(pole, battery);
+			}
+
+			System.out.println("-");
+
+			for (Consumer consumer : consumers) {
+				consumer.tick();
 			}
 		}
 	}

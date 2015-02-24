@@ -4,7 +4,7 @@ import net.indiespot.distribution.Resource;
 import net.indiespot.distribution.ResourceType;
 
 public class Generator {
-	public ResourceType type;
+	public final ResourceType type;
 	public int production;
 
 	public Generator(ResourceType type, int production) {
@@ -16,5 +16,10 @@ public class Generator {
 
 	public Resource generate() {
 		return new Resource(type, production, production);
+	}
+
+	@Override
+	public String toString() {
+		return this.getClass().getSimpleName() + "[" + type + ", +" + production + "]";
 	}
 }

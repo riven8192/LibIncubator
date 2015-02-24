@@ -28,6 +28,6 @@ public class Wire {
 
 	@Override
 	public String toString() {
-		return "Wire[" + a + " <-> " + b + "]";
+		return this.getClass().getSimpleName() + "[" + a + " <-> " + b + "]";
 	}
 }

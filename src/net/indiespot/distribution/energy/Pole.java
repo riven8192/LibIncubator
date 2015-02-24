@@ -13,6 +13,6 @@ public class Pole extends Node {
 
 	@Override
 	public String toString() {
-		return "Pole[" + x + "," + y + "]";
+		return this.getClass().getSimpleName() + "[" + x + "," + y + "]";
 	}
 }
