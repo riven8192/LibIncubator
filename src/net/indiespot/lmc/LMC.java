@@ -148,7 +148,7 @@ public class LMC {
 		}
 
 		private boolean isValue(String s) {
-			return s.matches("^[0-9]+$") || s.matches("^0x[0-9a-fA-f]+$");
+			return s.matches("^[0-9]+$") || s.matches("^0x[0-9a-fA-F]+$");
 		}
 
 		public int resolve(String variable) {
