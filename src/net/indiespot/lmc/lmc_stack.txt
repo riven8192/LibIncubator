@@ -1,0 +1,21 @@
+
+
+LDA A
+E_PSH
+
+LDA B
+E_PSH
+
+E_REM
+E_POP
+OUT
+
+
+
+HLT
+
+
+
+A DAT 100
+B DAT 6
+C DAT

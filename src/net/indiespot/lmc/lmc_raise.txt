@@ -1,0 +1,34 @@
+//      INP
+// LSSP SUB ONEZ // Label this memory address as LOOP, The instruction will then subtract the value stored at address ONE from the accumulator
+//      OUT
+//      BRZ QUIT // If the accumulator value is 0, jump to the memory address labeled QUIT
+//      BRA LSSP // If the accumulator value is not 0, jump to the memory address labeled LOOP
+// QUIT HLT      // Label this memory address as QUIT
+// ONEZ DAT 1    // Store the value 1 in this memory address, and label it ONE (variable declaration)
+
+
+
+START   LDA ZERO     // Initialize for multiple program run
+        STA RESULT
+        STA COUNT
+        INP          // User provided input
+        BRZ END      // Branch to program END if input = 0
+        STA VALUE    // Store input as VALUE
+LOOP    LDA RESULT   // Load the RESULT
+        ADD VALUE    // Add VALUE, the user provided input, to RESULT
+        STA RESULT   // Store the new RESULT
+        LDA COUNT    // Load the COUNT
+        ADD ONE      // Add ONE to the COUNT
+        STA COUNT    // Store the new COUNT
+        SUB VALUE    // Subtract the user provided input VALUE from COUNT
+        BRZ ENDLOOP  // If zero (VALUE has been added to RESULT by VALUE times), branch to ENDLOOP
+        BRA LOOP     // Branch to LOOP to continue adding VALUE to RESULT
+ENDLOOP LDA RESULT   // Load RESULT
+        OUT          // Output RESULT
+        BRA START    // Branch to the START to initialize and get another input VALUE
+END     HLT          // HALT - a zero was entered so done!
+RESULT  DAT          // Computed result (defaults to 0)
+COUNT   DAT          // Counter (defaults to 0)
+ONE     DAT 1        // Constant, value of 1
+VALUE   DAT          // User provided input, the value to be squared (defaults to 0)
+ZERO    DAT          // Constant, value of 0 (defaults to 0)

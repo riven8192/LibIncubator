@@ -1,15 +1,12 @@
-package net.indiespot.distribution.energy;
-
-import net.indiespot.distribution.Resource;
-import net.indiespot.distribution.ResourceType;
+package net.indiespot.distribution;
 
 public class Consumer extends Resource {
 	public int startupLevel;
 	public int consumption;
 	private boolean isActive;
 
-	public Consumer(ResourceType type, int startupLevel, int consumption, int capacity) {
-		super(type, 0, capacity);
+	public Consumer(int startupLevel, int consumption, int capacity) {
+		super(0, capacity);
 		if (startupLevel < 0)
 			throw new IllegalArgumentException();
 		if (consumption < 0)
@@ -23,13 +20,14 @@ public class Consumer extends Resource {
 	}
 
 	public boolean tick() {
-		if (!isActive) {
-			isActive = this.amount() >= startupLevel;
+		if (!isActive && this.amount() >= startupLevel) {
+			isActive = true;
 		}
 
-		if (isActive && this.demand(consumption) > 0) {
+		if (isActive && this.demand(consumption) != consumption) {
 			isActive = false; // fully drained
 		}
+
 		return isActive;
 	}
 

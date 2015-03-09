@@ -1,0 +1,61 @@
+    PSH A
+    PSH B
+JSR MUL_INIT
+    OUT
+
+    PSH C
+    PSH D    
+JSR MUL_INIT
+    OUT #1
+    
+    HLT
+
+A DAT 13
+B DAT 14
+C DAT 15
+D DAT 16
+
+
+//   pc = pop();
+//   base = pop();
+//   rem  = pop();
+//   push(pc)
+//   while(rem-- > 0) {
+//      sum += base;
+//      if(sum < 0) break;
+//   }
+//   $accumulator = sum;
+//   return; // GOTO pop()
+
+MUL_INIT POP RET_PC
+         POP MUL_REM
+         POP MUL_BASE
+         PSH RET_PC
+
+         // IF [rem-- > 0] THEN [GOTO MUL_ADD] ELSE [GOTO MUL_END] END
+MUL_LOOP DEC MUL_REM
+         BRP MUL_ADD
+         BRA MUL_END
+         
+         // sum += base
+MUL_ADD  LDA MUL_SUM
+         ADD MUL_BASE
+         STA MUL_SUM
+
+		 // no overflow?
+         BRP MUL_LOOP
+
+         // load result into accumulator
+MUL_END  LDA MUL_SUM
+         RET
+         
+MUL_SUM  DAT
+MUL_BASE DAT
+MUL_REM  DAT
+
+
+
+
+ZERO DAT 0          
+ONE  DAT 1       
+RET_PC DAT

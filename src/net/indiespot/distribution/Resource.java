@@ -1,18 +1,18 @@
 package net.indiespot.distribution;
 
-public class Resource {
-	public final ResourceType type;
+import net.indiespot.diff.Id;
+
+public class Resource extends Id {
 	private int amount;
 	private int capacity;
 
-	public Resource(ResourceType type, int amount, int capacity) {
+	public Resource(int amount, int capacity) {
 		if (amount < 0)
 			throw new IllegalArgumentException();
 		if (capacity <= 0)
 			throw new IllegalArgumentException();
 		if (capacity < amount)
 			throw new IllegalArgumentException();
-		this.type = type;
 		this.amount = amount;
 		this.capacity = capacity;
 	}
@@ -37,6 +37,27 @@ public class Resource {
 
 	//
 
+	public void shrink(int value) {
+		if (value < 0)
+			throw new IllegalArgumentException();
+		if (value > capacity)
+			throw new IllegalArgumentException();
+
+		if (capacity - value < amount) {
+			amount = capacity - value;
+		}
+
+		capacity -= value;
+	}
+
+	public void expand(int value) {
+		if (value < 0)
+			throw new IllegalArgumentException();
+		capacity += value;
+	}
+
+	//
+
 	public int supply() {
 		return amount;
 	}
@@ -45,22 +66,24 @@ public class Resource {
 		return capacity - amount;
 	}
 
-	// returns the amount left of 'val'
 	public int supply(int val) {
 		if (val < 0)
 			throw new IllegalArgumentException();
 		int txn = Math.min(val, this.demand());
+		if (txn < 0 || amount + txn > capacity)
+			throw new IllegalStateException();
 		amount += txn;
-		return val - txn;
+		return txn;
 	}
 
-	// returns the amount left of 'val'
 	public int demand(int val) {
 		if (val < 0)
 			throw new IllegalArgumentException();
 		int txn = Math.min(val, this.supply());
+		if (txn < 0 || amount - txn < 0)
+			throw new IllegalStateException();
 		amount -= txn;
-		return val - txn;
+		return txn;
 	}
 
 	public static int txn(Resource src, Resource dst) {
@@ -68,24 +91,23 @@ public class Resource {
 	}
 
 	public static int txn(Resource src, int cap, Resource dst) {
-		if (src.type != dst.type)
-			throw new IllegalStateException();
-
 		int supply = src.supply();
 		int demand = dst.demand();
+		if ((supply | demand) < 0)
+			throw new IllegalArgumentException();
 		if ((supply | demand) == 0)
 			return 0;
 
 		int txn = Math.min(cap, Math.min(supply, demand));
-		if (src.demand(txn) != 0)
+		if (src.demand(txn) != txn)
 			throw new IllegalStateException();
-		if (dst.supply(txn) != 0)
+		if (dst.supply(txn) != txn)
 			throw new IllegalStateException();
 		return txn;
 	}
 
 	@Override
 	public String toString() {
-		return this.getClass().getSimpleName() + "[" + type + ", " + amount + "/" + capacity + "]";
+		return this.getClass().getSimpleName() + "[" + amount + "/" + capacity + "]";
 	}
 }
