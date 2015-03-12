@@ -55,7 +55,6 @@ public abstract class Java4kRev2 extends Canvas {
 			title += title_infix;
 			title += "started";
 			frame.setTitle(title);
-
 		}
 		if (now() > lastSecondTimestamp + 1000L) {
 			int avgUpdateTook = (updateCounter == 0) ? 0 : (int) (updateNanos / updateCounter / 100_000L);

@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 //import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.nio.ShortBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,16 +22,6 @@ import static org.lwjgl.opengl.GL15.*;
 import static org.lwjgl.opengl.GL20.*;
 //import static org.lwjgl.opengl.GL21.*;
 import static org.lwjgl.opengl.GL30.*;
-//import static org.lwjgl.opengl.GL31.*;
-//import static org.lwjgl.opengl.GL32.*;
-//import static org.lwjgl.opengl.GL33.*;
-//import static org.lwjgl.opengl.GL40.*;
-//import static org.lwjgl.opengl.GL41.*;
-//import static org.lwjgl.opengl.GL42.*;
-//import static org.lwjgl.opengl.GL43.*;
-//import static org.lwjgl.opengl.GL44.*;
-//import static org.lwjgl.opengl.GL45.*;
-
 import static org.lwjgl.opengl.ARBTextureStorage.*;
 import static org.lwjgl.opengl.ARBMultiDrawIndirect.*;
 import static org.lwjgl.opengl.ARBDrawIndirect.*;
@@ -39,8 +30,6 @@ public class Main {
 	public static void main(String[] args) throws LWJGLException {
 		Display.setDisplayMode(new DisplayMode(800, 600));
 		Display.create(new PixelFormat(8, 16, 8, 8));
-		
-		
 
 		System.out.println(glGetString(GL_VERSION));
 
@@ -149,52 +138,64 @@ public class Main {
 		}
 		glUseProgram(program);
 
-		class Command {
-			public final int vertexCount, instanceCount, firstIndex, baseInstance;
+		MultiDrawElements mde = new MultiDrawElements(16);
 
-			public Command(int vertexCount, int instanceCount, int firstIndex, int baseInstance) {
-				this.vertexCount = vertexCount;
-				this.instanceCount = instanceCount;
-				this.firstIndex = firstIndex;
-				this.baseInstance = baseInstance;
-			}
-		}
-		List<Command> commands = new ArrayList<>();
+		mde.glInit();
 
-		int pos_texBufId = glGenBuffers();
 		{
-			FloatBuffer vd = BufferUtils.createFloatBuffer(3 * (2 + 2) * 4);
+			mde.vertexData = BufferUtils.createByteBuffer(100 << 2);
+			mde.indexData = BufferUtils.createShortBuffer(100);
+			mde.commandData = BufferUtils.createIntBuffer(100);
+
+			mde.reset();
+
 			{
-				Command last = null;
-
 				// tri 1
-				vd.put(0.25f).put(0.25f).put(0.0f).put(0.0f);
-				vd.put(0.75f).put(0.25f).put(1.0f).put(1.0f);
-				vd.put(0.25f).put(0.75f).put(0.0f).put(1.0f);
-				commands.add(last = new Command(3, 5, 0, 0));
+				{
+					FloatBuffer vd = mde.vertexData.asFloatBuffer();
+					vd.put(0.25f).put(0.25f).put(0.0f).put(0.0f);
+					vd.put(0.75f).put(0.25f).put(1.0f).put(1.0f);
+					vd.put(0.25f).put(0.75f).put(0.0f).put(1.0f);
+					mde.vertexData.position(mde.vertexData.position() + (vd.position() << 2));
 
-				// tri 2
-				vd.put(-0.50f).put(0.20f).put(0.0f).put(0.0f);
-				vd.put(-0.50f).put(0.75f).put(1.0f).put(1.0f);
-				vd.put(-0.25f).put(0.25f).put(0.0f).put(1.0f);
-				// tri 3
-				vd.put(-0.25f).put(0.25f).put(0.0f).put(1.0f);
-				vd.put(-0.50f).put(0.75f).put(0.5f).put(1.0f);
-				vd.put(-0.00f).put(0.50f).put(0.0f).put(0.5f);
-				commands.add(last = new Command(6, 3, last.firstIndex + last.vertexCount, 0));
+					mde.indexData.put((short) 0).put((short) 1).put((short) 2);
+
+					mde.scheduleDrawCommand(5);
+				}
+
+				// tri 2 & 3
+				{
+					FloatBuffer vd = mde.vertexData.asFloatBuffer();
+					vd.put(-0.50f).put(0.20f).put(0.0f).put(0.0f);
+					vd.put(-0.50f).put(0.75f).put(1.0f).put(1.0f);
+					vd.put(-0.25f).put(0.25f).put(0.0f).put(1.0f);
+					vd.put(-0.50f).put(0.75f).put(0.5f).put(1.0f);
+					vd.put(-0.00f).put(0.50f).put(0.0f).put(0.5f);
+					mde.vertexData.position(mde.vertexData.position() + (vd.position() << 2));
+
+					mde.indexData.put((short) 0).put((short) 1).put((short) 2);
+					mde.indexData.put((short) 2).put((short) 3).put((short) 4);
+
+					mde.scheduleDrawCommand(3);
+				}
 
 				// tri 4
-				vd.put(-0.33f).put(-0.90f).put(1.0f).put(1.0f);
-				vd.put(-0.33f).put(-0.15f).put(0.0f).put(0.0f);
-				vd.put(-0.50f).put(-0.35f).put(1.0f).put(0.0f);
-				commands.add(last = new Command(3, 2, last.firstIndex + last.vertexCount, 0));
+				{
+					FloatBuffer vd = mde.vertexData.asFloatBuffer();
+					vd.put(-0.33f).put(-0.90f).put(1.0f).put(1.0f);
+					vd.put(-0.33f).put(-0.15f).put(0.0f).put(0.0f);
+					vd.put(-0.50f).put(-0.35f).put(1.0f).put(0.0f);
+					mde.vertexData.position(mde.vertexData.position() + (vd.position() << 2));
+
+					mde.indexData.put((short) 0).put((short) 1).put((short) 2);
+
+					mde.scheduleDrawCommand(2);
+				}
 			}
-			vd.flip();
 
-			glBindBuffer(GL_ARRAY_BUFFER, pos_texBufId);
-			glBufferData(GL_ARRAY_BUFFER, vd, GL_STREAM_DRAW);
+			mde.glBindBuffers();
+			mde.glUploadBufferData();
 
-			final int stride = 16;
 			long offset = 0L;
 
 			int location, size;
@@ -204,40 +205,25 @@ public class Main {
 			size = 2;
 			normalized = false;
 			glEnableVertexAttribArray(location);
-			glVertexAttribPointer(location, size, GL_FLOAT, normalized, stride, offset);
+			glVertexAttribPointer(location, size, GL_FLOAT, normalized, mde.stride, offset);
 			offset += 8L;
 
 			location = 1;
 			size = 2;
 			normalized = false;
 			glEnableVertexAttribArray(location);
-			glVertexAttribPointer(location, size, GL_FLOAT, normalized, stride, offset);
+			glVertexAttribPointer(location, size, GL_FLOAT, normalized, mde.stride, offset);
 			offset += 8L;
 
-			if (offset != stride)
+			if (offset != mde.stride)
 				throw new IllegalStateException();
-		}
-
-		int cmdStride = 4 << 2;
-		int cmdBufId = glGenBuffers();
-		{
-			IntBuffer cmdBuf = BufferUtils.createIntBuffer(commands.size() * 4);
-			for (Command command : commands) {
-				cmdBuf.put(command.vertexCount);
-				cmdBuf.put(command.instanceCount);
-				cmdBuf.put(command.firstIndex);
-				cmdBuf.put(command.baseInstance);
-			}
-			cmdBuf.flip();
-
-			glBindBuffer(GL_DRAW_INDIRECT_BUFFER, cmdBufId);
-			glBufferData(GL_DRAW_INDIRECT_BUFFER, cmdBuf, GL_STATIC_DRAW);
 		}
 
 		while (!Display.isCloseRequested()) {
 			glClear(GL_COLOR_BUFFER_BIT);
 
-			glMultiDrawArraysIndirect(GL_TRIANGLES, 0L, commands.size(), cmdStride);
+			mde.glBindBuffers();
+			mde.glMultiDraw();
 
 			Display.update();
 			Display.sync(60);
